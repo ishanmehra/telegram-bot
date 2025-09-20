@@ -30,6 +30,9 @@ class BotHandlers {
     
     // Manual joke request
     this.bot.onText(/\/joke/, (msg) => this.handleManualJoke(msg));
+
+    // Catch-all handler for invalid commands (should be last)
+    this.bot.on('message', (msg) => this.handleInvalidCommand(msg));
   }
 
   /**
@@ -256,6 +259,60 @@ class BotHandlers {
     } catch (error) {
       console.error('Error in manual joke handler:', error);
       await this.bot.sendMessage(chatId, '❌ Sorry, something went wrong. Please try again.');
+    }
+  }
+
+  /**
+   * Handle invalid commands or unrecognized messages
+   */
+  async handleInvalidCommand(msg) {
+    const chatId = msg.chat.id.toString();
+    const text = msg.text || '';
+    
+    // Skip if message was already handled by a specific command
+    const validCommands = [
+      /\/start/,
+      /^ENABLE$/i,
+      /^DISABLE$/i, 
+      /^\/frequency \d+$/,
+      /\/status/,
+      /\/help/,
+      /\/joke/
+    ];
+    
+    // Check if message matches any valid command
+    const isValidCommand = validCommands.some(regex => regex.test(text));
+    
+    if (isValidCommand) {
+      return; // Don't handle valid commands here
+    }
+    
+    // Handle invalid commands
+    try {
+      const user = await User.findOne({ chatId });
+      
+      if (!user) {
+        await this.bot.sendMessage(chatId, 
+          '❌ *Unknown command.*\n\nPlease start the bot first with /start to get started!',
+          { parse_mode: 'Markdown' }
+        );
+        return;
+      }
+      
+      const helpMessage = `❌ *I didn't understand that command.*\n\n` +
+        `*Available commands:*\n` +
+        `• ENABLE - Resume joke delivery\n` +
+        `• DISABLE - Pause joke delivery\n` +
+        `• /frequency <number> - Set frequency (1-1440 minutes)\n` +
+        `• /status - Check your settings\n` +
+        `• /joke - Get a joke right now\n` +
+        `• /help - Show detailed help\n\n` +
+        `Type exactly as shown above. For example: \`ENABLE\` or \`/frequency 5\``;
+      
+      await this.bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
+    } catch (error) {
+      console.error('Error in invalid command handler:', error);
+      await this.bot.sendMessage(chatId, '❌ Sorry, something went wrong. Please try /help for available commands.');
     }
   }
 
