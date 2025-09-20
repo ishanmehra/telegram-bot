@@ -50,7 +50,7 @@ A Telegram bot that delivers jokes at configurable intervals, built with Express
    Update `.env` with your configuration:
    ```env
    TELEGRAM_BOT_TOKEN=your_bot_token_here
-   MONGODB_URI=mongodb+srv://username:password@cluster0.xxxxx.mongodb.net/telegram_joke_bot?retryWrites=true&w=majority
+   MONGODB_URI=your_mongodb_uri
    PORT=3000
    NODE_ENV=development
    ```
