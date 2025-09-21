@@ -20,7 +20,7 @@ mongoose.connect(process.env.MONGODB_URI)
 .then(() => console.log('Connected to MongoDB Atlas'))
 .catch((error) => console.error('MongoDB connection error:', error));
 
-// Initialize Telegram Bot with enhanced configuration for Render
+// Initialize Telegram Bot with webhook mode for Render
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { 
   polling: false,
   request: {
@@ -32,7 +32,7 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
   }
 });
 
-// Enhanced bot initialization for Render
+// Use webhook instead of polling for Render deployment
 async function initializeBot() {
   try {
     // Delete any existing webhook first
@@ -43,15 +43,10 @@ async function initializeBot() {
     const botInfo = await bot.getMe();
     console.log('Bot verified:', botInfo.username);
     
-    // Start polling with enhanced configuration
-    await bot.startPolling({
-      interval: 2000,
-      params: {
-        timeout: 10
-      }
-    });
-    
-    console.log('Bot polling started successfully');
+    // Set webhook URL for Render
+    const webhookUrl = process.env.RENDER_EXTERNAL_URL || `https://telegram-bot-2-2gkx.onrender.com`;
+    await bot.setWebHook(`${webhookUrl}/webhook/${process.env.TELEGRAM_BOT_TOKEN}`);
+    console.log('Webhook set successfully:', webhookUrl);
     
   } catch (error) {
     console.error('Failed to initialize bot:', error.message);
@@ -59,32 +54,23 @@ async function initializeBot() {
     if (error.code === 'EFATAL' || error.response?.statusCode === 401) {
       console.error('Invalid bot token. Please check your TELEGRAM_BOT_TOKEN');
       process.exit(1);
-    } else if (error.code === 'ETIMEDOUT' || error.code === 'ECONNRESET') {
-      console.error('Network connectivity issue. Bot will retry automatically.');
     } else {
       console.error('Unexpected error:', error);
     }
   }
 }
 
-// Initialize bot after a short delay
-setTimeout(initializeBot, 2000);
+// Initialize bot immediately
+initializeBot();
 
-// Handle polling errors gracefully
-bot.on('polling_error', (error) => {
-  if (error.code === 'ETELEGRAM' && error.message.includes('409 Conflict')) {
-    console.log('Polling conflict detected.');
-  } else if (error.code === 'EFATAL') {
-    console.error('Fatal polling error:', error.message);
-    // Attempt to restart after a delay
-    setTimeout(() => {
-      console.log('Attempting to restart bot...');
-      initializeBot();
-    }, 5000);
-  } else {
-    console.log('Polling error:', error.code, '-', error.message);
-  }
+// Webhook route for receiving Telegram updates
+app.post(`/webhook/${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
 });
+
+// Remove polling error handler since we're using webhooks
+// bot.on('polling_error', ...) - not needed for webhook mode
 
 // Initialize services
 const jokeService = new JokeService();
