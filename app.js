@@ -20,36 +20,55 @@ mongoose.connect(process.env.MONGODB_URI)
 .then(() => console.log('Connected to MongoDB Atlas'))
 .catch((error) => console.error('MongoDB connection error:', error));
 
-// Initialize Telegram Bot
+// Initialize Telegram Bot with enhanced configuration for Render
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { 
-  polling: false
+  polling: false,
+  request: {
+    agentOptions: {
+      keepAlive: true,
+      family: 4
+    },
+    timeout: 30000
+  }
 });
 
-// Clear any existing webhook and start polling
-bot.deleteWebHook()
-  .then(() => {
-    console.log('Starting bot polling...');
-    // Verify bot token by getting bot info
-    return bot.getMe();
-  })
-  .then((botInfo) => {
-    console.log(`Bot verified: ${botInfo.first_name} (@${botInfo.username})`);
-    return bot.startPolling({
-      interval: 1000,
+// Enhanced bot initialization for Render
+async function initializeBot() {
+  try {
+    // Delete any existing webhook first
+    await bot.deleteWebHook();
+    console.log('Webhook deleted successfully');
+    
+    // Get bot info to verify token
+    const botInfo = await bot.getMe();
+    console.log('Bot verified:', botInfo.username);
+    
+    // Start polling with enhanced configuration
+    await bot.startPolling({
+      interval: 2000,
       params: {
-        timeout: 30
+        timeout: 10
       }
     });
-  })
-  .then(() => {
+    
     console.log('Bot polling started successfully');
-  })
-  .catch((error) => {
-    console.error('Failed to start bot:', error.message);
+    
+  } catch (error) {
+    console.error('Failed to initialize bot:', error.message);
+    
     if (error.code === 'EFATAL' || error.response?.statusCode === 401) {
-      console.error('Invalid bot token. Please check your TELEGRAM_BOT_TOKEN in .env file');
+      console.error('Invalid bot token. Please check your TELEGRAM_BOT_TOKEN');
+      process.exit(1);
+    } else if (error.code === 'ETIMEDOUT' || error.code === 'ECONNRESET') {
+      console.error('Network connectivity issue. Bot will retry automatically.');
+    } else {
+      console.error('Unexpected error:', error);
     }
-  });
+  }
+}
+
+// Initialize bot after a short delay
+setTimeout(initializeBot, 2000);
 
 // Handle polling errors gracefully
 bot.on('polling_error', (error) => {
@@ -57,8 +76,11 @@ bot.on('polling_error', (error) => {
     console.log('Polling conflict detected.');
   } else if (error.code === 'EFATAL') {
     console.error('Fatal polling error:', error.message);
-    console.error('This usually indicates an invalid bot token or network issue');
-    console.error('Please check your TELEGRAM_BOT_TOKEN in .env file');
+    // Attempt to restart after a delay
+    setTimeout(() => {
+      console.log('Attempting to restart bot...');
+      initializeBot();
+    }, 5000);
   } else {
     console.log('Polling error:', error.code, '-', error.message);
   }

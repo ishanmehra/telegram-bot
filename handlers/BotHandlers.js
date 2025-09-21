@@ -7,6 +7,27 @@ class BotHandlers {
   }
 
   /**
+   * Send message with retry mechanism for better reliability on Render
+   */
+  async sendMessageWithRetry(chatId, message, options = {}, maxRetries = 3) {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        return await this.bot.sendMessage(chatId, message, options);
+      } catch (error) {
+        console.error(`Message send attempt ${i + 1} failed:`, error.message);
+        
+        if (i === maxRetries - 1) {
+          console.error('All retry attempts failed');
+          throw error;
+        }
+        
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+      }
+    }
+  }
+
+  /**
    * Set up all bot command handlers
    */
   setupCommands() {
@@ -69,12 +90,12 @@ class BotHandlers {
           `• /help - Show this help message\n\n` +
           `Let's start with your first joke!`;
         
-        await this.bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
+        await this.sendMessageWithRetry(chatId, welcomeMessage, { parse_mode: 'Markdown' });
         
         // Send first joke immediately
         await this.sendJokeToUser(user);
       } else {
-        await this.bot.sendMessage(chatId, 
+        await this.sendMessageWithRetry(chatId, 
           `Welcome back! You're already registered.\n\n` +
           `Current status: ${user.isEnabled ? 'Enabled' : 'Disabled'}\n` +
           `Frequency: ${user.frequency} minute(s)\n\n` +
@@ -84,7 +105,7 @@ class BotHandlers {
       }
     } catch (error) {
       console.error('Error in start handler:', error);
-      await this.bot.sendMessage(chatId, 'Sorry, something went wrong. Please try again.');
+      await this.sendMessageWithRetry(chatId, 'Sorry, something went wrong. Please try again.');
     }
   }
 
@@ -98,19 +119,19 @@ class BotHandlers {
       const user = await User.findOne({ chatId });
       
       if (!user) {
-        await this.bot.sendMessage(chatId, 'Please start the bot first with /start');
+        await this.sendMessageWithRetry(chatId, 'Please start the bot first with /start');
         return;
       }
       
       if (user.isEnabled) {
-        await this.bot.sendMessage(chatId, 'Joke delivery is already enabled!');
+        await this.sendMessageWithRetry(chatId, 'Joke delivery is already enabled!');
         return;
       }
       
       user.isEnabled = true;
       await user.save();
       
-      await this.bot.sendMessage(chatId, 
+      await this.sendMessageWithRetry(chatId, 
         `*Joke delivery enabled!*\n\n` +
         `You'll receive jokes every *${user.frequency} minute(s)*.`,
         { parse_mode: 'Markdown' }
@@ -120,7 +141,7 @@ class BotHandlers {
       await this.sendJokeToUser(user);
     } catch (error) {
       console.error('Error in enable handler:', error);
-      await this.bot.sendMessage(chatId, 'Sorry, something went wrong. Please try again.');
+      await this.sendMessageWithRetry(chatId, 'Sorry, something went wrong. Please try again.');
     }
   }
 
@@ -134,25 +155,25 @@ class BotHandlers {
       const user = await User.findOne({ chatId });
       
       if (!user) {
-        await this.bot.sendMessage(chatId, 'Please start the bot first with /start');
+        await this.sendMessageWithRetry(chatId, 'Please start the bot first with /start');
         return;
       }
       
       if (!user.isEnabled) {
-        await this.bot.sendMessage(chatId, 'Joke delivery is already disabled!');
+        await this.sendMessageWithRetry(chatId, 'Joke delivery is already disabled!');
         return;
       }
       
       user.isEnabled = false;
       await user.save();
       
-      await this.bot.sendMessage(chatId, 
+      await this.sendMessageWithRetry(chatId, 
         '*Joke delivery disabled.*\n\nSend ENABLE to resume receiving jokes.',
         { parse_mode: 'Markdown' }
       );
     } catch (error) {
       console.error('Error in disable handler:', error);
-      await this.bot.sendMessage(chatId, 'Sorry, something went wrong. Please try again.');
+      await this.sendMessageWithRetry(chatId, 'Sorry, something went wrong. Please try again.');
     }
   }
 
@@ -165,7 +186,7 @@ class BotHandlers {
     
     try {
       if (frequency < 1 || frequency > 1440) {
-        await this.bot.sendMessage(chatId, 
+        await this.sendMessageWithRetry(chatId, 
           'Frequency must be between 1 and 1440 minutes (24 hours).'
         );
         return;
@@ -174,21 +195,21 @@ class BotHandlers {
       const user = await User.findOne({ chatId });
       
       if (!user) {
-        await this.bot.sendMessage(chatId, 'Please start the bot first with /start');
+        await this.sendMessageWithRetry(chatId, 'Please start the bot first with /start');
         return;
       }
       
       user.frequency = frequency;
       await user.save();
       
-      await this.bot.sendMessage(chatId, 
+      await this.sendMessageWithRetry(chatId, 
         `*Frequency updated!*\n\n` +
         `You'll now receive jokes every *${frequency} minute(s)*.`,
         { parse_mode: 'Markdown' }
       );
     } catch (error) {
       console.error('Error in frequency handler:', error);
-      await this.bot.sendMessage(chatId, 'Sorry, something went wrong. Please try again.');
+      await this.sendMessageWithRetry(chatId, 'Sorry, something went wrong. Please try again.');
     }
   }
 
@@ -202,7 +223,7 @@ class BotHandlers {
       const user = await User.findOne({ chatId });
       
       if (!user) {
-        await this.bot.sendMessage(chatId, 'Please start the bot first with /start');
+        await this.sendMessageWithRetry(chatId, 'Please start the bot first with /start');
         return;
       }
       
@@ -216,10 +237,10 @@ class BotHandlers {
         `Frequency: ${user.frequency} minute(s)\n` +
         `${lastSent}`;
       
-      await this.bot.sendMessage(chatId, statusMessage, { parse_mode: 'Markdown' });
+      await this.sendMessageWithRetry(chatId, statusMessage, { parse_mode: 'Markdown' });
     } catch (error) {
       console.error('Error in status handler:', error);
-      await this.bot.sendMessage(chatId, 'Sorry, something went wrong. Please try again.');
+      await this.sendMessageWithRetry(chatId, 'Sorry, something went wrong. Please try again.');
     }
   }
 
@@ -243,7 +264,7 @@ class BotHandlers {
       `• \`/frequency 60\` - Get jokes every hour\n\n` +
       `Enjoy the jokes!`;
     
-    await this.bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
+    await this.sendMessageWithRetry(chatId, helpMessage, { parse_mode: 'Markdown' });
   }
 
   /**
@@ -256,14 +277,14 @@ class BotHandlers {
       const user = await User.findOne({ chatId });
       
       if (!user) {
-        await this.bot.sendMessage(chatId, 'Please start the bot first with /start');
+        await this.sendMessageWithRetry(chatId, 'Please start the bot first with /start');
         return;
       }
       
       await this.sendJokeToUser(user);
     } catch (error) {
       console.error('Error in manual joke handler:', error);
-      await this.bot.sendMessage(chatId, 'Sorry, something went wrong. Please try again.');
+      await this.sendMessageWithRetry(chatId, 'Sorry, something went wrong. Please try again.');
     }
   }
 
@@ -294,7 +315,7 @@ class BotHandlers {
       const user = await User.findOne({ chatId });
       
       if (!user) {
-        await this.bot.sendMessage(chatId, 
+        await this.sendMessageWithRetry(chatId, 
           '*Unknown command.*\n\nPlease start the bot first with /start to get started!',
           { parse_mode: 'Markdown' }
         );
@@ -311,10 +332,10 @@ class BotHandlers {
         `• /help - Show detailed help\n\n` +
         `Type exactly as shown above. For example: \`ENABLE\` or \`/frequency 5\``;
       
-      await this.bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
+      await this.sendMessageWithRetry(chatId, helpMessage, { parse_mode: 'Markdown' });
     } catch (error) {
       console.error('Error in invalid command handler:', error);
-      await this.bot.sendMessage(chatId, 'Sorry, something went wrong. Please try /help for available commands.');
+      await this.sendMessageWithRetry(chatId, 'Sorry, something went wrong. Please try /help for available commands.');
     }
   }
 
@@ -324,13 +345,13 @@ class BotHandlers {
   async sendJokeToUser(user) {
     try {
       const joke = await this.jokeService.getRandomJoke();
-      await this.bot.sendMessage(user.chatId, joke, { parse_mode: 'Markdown' });
+      await this.sendMessageWithRetry(user.chatId, joke, { parse_mode: 'Markdown' });
       await user.markJokeSent();
     } catch (error) {
       console.error(`Error sending joke to user ${user.chatId}:`, error);
       // Try to send an error message to the user
       try {
-        await this.bot.sendMessage(user.chatId, 
+        await this.sendMessageWithRetry(user.chatId, 
           'Sorry, I couldn\'t fetch a joke right now. Please try again later.'
         );
       } catch (sendError) {
